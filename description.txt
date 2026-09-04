@@ -1,0 +1,5 @@
+﻿This is the pre-library of the Avaritia mod.
+It has some inconspicuous functions, such as draggable UI components
+, sequence frame cutting system and text color gradient, etc.
+这是无尽贪婪模组的前置库，有一些不太起眼的功能
+，例如可拖拽的UI组件，序列帧切割系统和文本颜色渐变等。
