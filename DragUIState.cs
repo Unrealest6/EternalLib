@@ -1,14 +1,15 @@
 ﻿namespace EternalLib
 {
-    public abstract class DragUIState<T, TPanel> : UIState where T : DragUIState<T, TPanel> where TPanel : UIElement, new()
+    public abstract class DragUIState<T> : UIState where T : UIElement
     {
-        protected TPanel panel = new();
+        public bool Visible { get; set; }
+        protected T? Element { get; set; }
         protected virtual Keys Key => Keys.LeftShift;
         protected virtual float VelocityDecay => 0.16f;
         protected virtual float EdgeMargin => 10f;
         protected virtual float SpringStrength => 0.2f;
-        public static bool IsDragging { get; private set; }
-        private static bool IsKeyDown { get; set; }
+        public bool IsDragging { get; private set; }
+        private bool IsKeyDown { get; set; }
         private float _dragOffsetX, _dragOffsetY;
         private bool _isRebounding;
         private Vector2 _reboundVelocity;
@@ -16,19 +17,23 @@
         public override void Update(GameTime gameTime)
         {
             base.Update(gameTime);
+            if (Element is null)
+            {
+                return;
+            }
             if (_isRebounding)
             {
                 ApplyVelocityLerpRebound();
             }
-            if (panel.IsMouseHovering)
+            if (Element.IsMouseHovering)
             {
                 Main.LocalPlayer.mouseInterface = true;
                 if (Main.mouseLeft && Main.keyState.IsKeyDown(Key))
                 {
                     if (!IsKeyDown)
                     {
-                        _dragOffsetX = Main.MouseScreen.X - panel.GetDimensions().X;
-                        _dragOffsetY = Main.MouseScreen.Y - panel.GetDimensions().Y;
+                        _dragOffsetX = Main.MouseScreen.X - Element.GetDimensions().X;
+                        _dragOffsetY = Main.MouseScreen.Y - Element.GetDimensions().Y;
                         _isRebounding = false;
                         _reboundVelocity = Vector2.Zero;
                         IsDragging = true;
@@ -38,11 +43,11 @@
             }
             if (Main.mouseLeft && IsKeyDown)
             {
-                float newX = panel.Left.Pixels + Main.MouseScreen.X - panel.GetDimensions().X - _dragOffsetX;
-                float newY = panel.Top.Pixels + Main.MouseScreen.Y - panel.GetDimensions().Y - _dragOffsetY;
-                panel.Left.Set(newX, 0f);
-                panel.Top.Set(newY, 0f);
-                panel.Recalculate();
+                float newX = Element.Left.Pixels + Main.MouseScreen.X - Element.GetDimensions().X - _dragOffsetX;
+                float newY = Element.Top.Pixels + Main.MouseScreen.Y - Element.GetDimensions().Y - _dragOffsetY;
+                Element.Left.Set(newX, 0f);
+                Element.Top.Set(newY, 0f);
+                Element.Recalculate();
             }
             else
             {
@@ -62,7 +67,11 @@
         /// </summary>
         private void CheckEdgeCollision()
         {
-            CalculatedStyle dims = panel.GetDimensions();
+            if (Element is null)
+            {
+                return;
+            }
+            CalculatedStyle dims = Element.GetDimensions();
             float panelW = dims.Width;
             float panelH = dims.Height;
             float screenW = Main.screenWidth;
@@ -110,10 +119,14 @@
         /// </summary>
         private void ApplyVelocityLerpRebound()
         {
+            if (Element is null)
+            {
+                return;
+            }
             _reboundVelocity = Vector2.Lerp(_reboundVelocity, _targetVelocity, VelocityDecay);
-            panel.Left.Set(panel.Left.Pixels + _reboundVelocity.X, 0f);
-            panel.Top.Set(panel.Top.Pixels + _reboundVelocity.Y, 0f);
-            panel.Recalculate();
+            Element.Left.Set(Element.Left.Pixels + _reboundVelocity.X, 0f);
+            Element.Top.Set(Element.Top.Pixels + _reboundVelocity.Y, 0f);
+            Element.Recalculate();
             if (_reboundVelocity.Length() >= 0.3f)
             {
                 return;
