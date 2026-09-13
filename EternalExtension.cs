@@ -44,12 +44,16 @@
                 return sb.ToString();
             }
         }
-        extension(Color color)
+        extension(Color)
         {
-            public Color AddRGB(short amount) =>
+            public static Color operator +(Color color, short amount) =>
                 new((byte)Math.Clamp(byte.MinValue, color.R + amount, byte.MaxValue)
-                    , (byte)Math.Clamp(byte.MinValue, color.G + amount, byte.MaxValue)
-                    , (byte)Math.Clamp(byte.MinValue, color.B + amount, byte.MaxValue), color.A);
+                , (byte)Math.Clamp(byte.MinValue, color.G + amount, byte.MaxValue)
+                , (byte)Math.Clamp(byte.MinValue, color.B + amount, byte.MaxValue), color.A);
+            public static Color operator -(Color color, short amount) =>
+                new((byte)Math.Clamp(byte.MinValue, color.R - amount, byte.MaxValue)
+                , (byte)Math.Clamp(byte.MinValue, color.G - amount, byte.MaxValue)
+                , (byte)Math.Clamp(byte.MinValue, color.B - amount, byte.MaxValue), color.A);
         }
         extension(Player player)
         {
