@@ -1,4 +1,4 @@
 displayName = EternalLib
 author = Unrealistically
-version = 0.21
+version = 0.31
 includeSource = true

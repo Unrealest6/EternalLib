@@ -1,48 +1,66 @@
-﻿namespace EternalLib
+namespace EternalLib
 {
     public sealed class EternalPlayer : ModPlayer
     {
+        /// <summary>双击跳跃键的判定窗口（tick）。</summary>
+        public const int DoubleTapWindow = 20;
         internal bool CanFly { get; set; }
         internal float FlySpeedX => Player.moveSpeed * 5f;
         internal float FlySpeedY => Player.jumpSpeedBoost + Player.jumpSpeed;
-        private bool IsFlyKeyDown { get; set; } = true;
-        private bool Fly { get; set; }
-        private int FlyTimer { get; set; }
-        private int KeyDownTimer { get; set; }
-        private void PreFly()
+        /// <summary>是否正处于飞行状态。</summary>
+        public bool IsFlying { get; private set; }
+        private bool _jumpWasDown;
+        private int _doubleTapTimer;
+        public override void Initialize() => ResetFlyState();
+        public override void OnRespawn() => ResetFlyState();
+        public override void ResetEffects() => CanFly = false;
+        public override void PreUpdateMovement()
         {
-            if (FlyTimer <= 0)
+            if (!CanFly)
             {
-                KeyDownTimer = 0;
+                // 失去飞行能力（卸下装备/死亡）时不要保留旧的飞行状态，
+                // 否则重新装备后无需双击就会立刻起飞。
+                ResetFlyState();
+                return;
             }
-            if (Player.controlJump)
+            UpdateFlySwitch();
+            if (IsFlying)
             {
-                if (IsFlyKeyDown)
+                ApplyFlyMovement();
+            }
+        }
+        private void ResetFlyState()
+        {
+            IsFlying = false;
+            _jumpWasDown = false;
+            _doubleTapTimer = 0;
+        }
+        /// <summary>检测“按下”边沿并在窗口期内双击时切换飞行。</summary>
+        private void UpdateFlySwitch()
+        {
+            bool jumpDown = Player.controlJump;
+            if (jumpDown && !_jumpWasDown)
+            {
+                if (_doubleTapTimer > 0)
                 {
-                    KeyDownTimer++;
-                    if (KeyDownTimer == 2)
-                    {
-                        Fly = !Fly;
-                        KeyDownTimer = 0;
-                    }
-                    else
-                    {
-                        FlyTimer = 20;
-                    }
-                    IsFlyKeyDown = false;
+                    IsFlying = !IsFlying;
+                    _doubleTapTimer = 0;
+                }
+                else
+                {
+                    _doubleTapTimer = DoubleTapWindow;
                 }
             }
-            if (!Player.controlJump)
+            _jumpWasDown = jumpDown;
+            if (_doubleTapTimer > 0)
             {
-                IsFlyKeyDown = true;
+                _doubleTapTimer--;
             }
-            FlyTimer--;
         }
-        private void Flying(Vector2 maxVelocity)
+        private void ApplyFlyMovement()
         {
-            Player.gravity = 0;
+            Player.gravity = 0f;
             Player.noFallDmg = true;
-            Player.ResetVelocity(maxVelocity);
             if (Player.controlLeft)
             {
                 Player.velocity.X--;
@@ -55,26 +73,15 @@
             {
                 Player.velocity.Y--;
             }
-            if (Player.controlDown)
+            else if (Player.controlDown)
             {
                 Player.velocity.Y++;
             }
-            if (!(Player.controlDown || Player.controlUp || Player.controlJump))
+            else
             {
-                Player.velocity.Y = 0;
+                Player.velocity.Y = 0f;
             }
-        }
-        public override void ResetEffects()
-        {
-            CanFly = false;
-        }
-        public override void PreUpdateMovement()
-        {
-            PreFly();
-            if (CanFly && Fly)
-            {
-                Flying(new Vector2(FlySpeedX, FlySpeedY));
-            }
+            Player.ClampVelocity(new Vector2(FlySpeedX, FlySpeedY));
         }
     }
 }
