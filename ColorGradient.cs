@@ -6,9 +6,8 @@ namespace EternalLib
         Right
     }
     /// <summary>
-    /// 文本渐变色定义。
-    /// <para>按 <see cref="MillisecondsPerColor"/> 在 <see cref="Colors"/> 之间循环偏移，
-    /// 供 <c>string.ApplyGradient</c> 生成 <c>[c/HEX:字符]</c> 标签序列。</para>
+    /// 文本渐变色定义：按 <see cref="MillisecondsPerColor"/> 在 <see cref="Colors"/> 之间循环偏移，
+    /// 供 <c>string.ApplyGradient</c> 生成 <c>[c/HEX:字符]</c> 标签序列。
     /// </summary>
     public sealed class ColorGradient
     {

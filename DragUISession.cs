@@ -2,8 +2,7 @@ namespace EternalLib
 {
     /// <summary>
     /// 面板拖拽的全局会话状态。
-    /// <para>用法：宿主订阅 <see cref="DragStarted"/> 取消自己的拖拽操作，或在每帧检查
-    /// <see cref="IsAnyPanelDragging"/> 直接跳过输入处理。</para>
+    /// <para>宿主可订阅 <see cref="DragStarted"/> 取消自己的拖拽操作，或每帧检查 <see cref="IsAnyPanelDragging"/> 跳过输入处理。</para>
     /// </summary>
     public static class DragUISession
     {

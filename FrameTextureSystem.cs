@@ -1,8 +1,7 @@
 namespace EternalLib
 {
     /// <summary>
-    /// 序列帧注册与驱动中心。
-    /// 所有 <see cref="FrameTexture"/> 都在这里注册、加载、逐 tick 推进与卸载。
+    /// 序列帧注册与驱动中心：所有 <see cref="FrameTexture"/> 在此注册、加载、逐 tick 推进与卸载。
     /// </summary>
     public sealed class FrameTextureSystem : ModSystem
     {
@@ -19,12 +18,12 @@ namespace EternalLib
         /// <summary>
         /// 注册垂直单方向序列帧。
         /// </summary>
+        /// <param name="name">注册名，需全局唯一</param>
         /// <param name="texturePath">纹理路径</param>
         /// <param name="totalFrames">帧数（图集高度必须能被其整除）</param>
         /// <param name="timeline">帧时间轴，为 null 时按 <paramref name="frameDuration"/> 顺序播放</param>
-        /// <param name="name">名称</param>
-        /// <param name="frameDuration">默认帧数</param>
-        /// <param name="mode">模式</param>
+        /// <param name="frameDuration">每帧默认停留的 tick 数</param>
+        /// <param name="mode">播放模式</param>
         public static FrameTexture Register(string name, string texturePath, int totalFrames,
             FrameDef[]? timeline, int frameDuration = 1, FrameMode mode = FrameMode.Loop)
             => GetOrAdd(name, texturePath, () => new FrameTexture(name, texturePath, totalFrames, timeline, frameDuration, mode));
@@ -59,8 +58,8 @@ namespace EternalLib
             {
                 if (existing.TexturePath != texturePath)
                 {
-                    EternalLog.Warn($"序列帧注册名 '{name}' 已被 '{existing.TexturePath}' 占用，"
-                        + $"本次注册的 '{texturePath}' 被忽略。请使用独一无二的注册名以避免跨模组冲突。");
+                    EternalLog.Warn($"Frame animation name '{name}' is already taken by '{existing.TexturePath}'; "
+                        + $"the new registration for '{texturePath}' was ignored. Use unique names to avoid cross-mod conflicts.");
                 }
                 return existing;
             }
@@ -83,7 +82,7 @@ namespace EternalLib
                 catch (Exception ex)
                 {
                     anim.MarkBroken();
-                    EternalLog.Error($"加载序列帧 '{anim.Name}'（{anim.TexturePath}）失败：{ex.Message}");
+                    EternalLog.Error($"Failed to load frame animation '{anim.Name}' ({anim.TexturePath}): {ex.Message}");
                 }
             }
         }
@@ -93,10 +92,9 @@ namespace EternalLib
             {
                 return;
             }
-            // PostSetupContent 本身就在主线程上执行，直接加载即可，
-            // 用 Main.QueueMainThreadAction 会把加载推迟到未知时机并造成首帧卡顿。
+            // PostSetupContent 在主线程执行，直接加载即可；改用 Main.QueueMainThreadAction 会把加载推迟到未知时机并造成首帧卡顿。
             LoadAll();
-            EternalLog.Info($"已加载 {Animations.Count} 个序列帧。");
+            EternalLog.Info($"Loaded {Animations.Count} frame animations.");
         }
         public override void PostUpdateEverything()
         {

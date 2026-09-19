@@ -12,6 +12,9 @@ namespace EternalLib
             ColorGradient.ClearAll();
             DragUISession.Reset();
             FrameItem.ClearTextureCache();
+            //物块破坏相关的运行期状态与注册表由 EternalLib.Unload → BreakHelper.ResetRegistries 复位：
+            //注册表里的类型号每次加载都会变，收集窗口 / 屏蔽标记残留会让下一次挖掘行为异常。
+            //（库不再持有依赖方设置的委托，所以没有需要解绑的静态钩子。）
         }
     }
 }

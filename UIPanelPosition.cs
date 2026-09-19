@@ -20,10 +20,8 @@ namespace EternalLib
                && float.IsFinite(LeftPercent) && float.IsFinite(TopPercent);
     }
     /// <summary>
-    /// 把 UI 面板位置存进<b>角色存档</b>（<see cref="ModPlayer.SaveData"/>）。
-    /// <para>适合“全局性”的客户端界面：位置跟着角色走，单人与多人都不需要服务器参与，
-    /// 也不会污染世界存档。像工作台那样“绑定某个物块实体”的界面，仍应把位置写进对应的
-    /// <c>TileEntity</c>（AvaritiaMod 现有做法）。</para>
+    /// 把 UI 面板位置存进<b>角色存档</b>（<see cref="ModPlayer.SaveData"/>）：位置跟随角色，单人与多人都不需要服务器参与，也不会污染世界存档。
+    /// <para>像工作台那样“绑定某个物块实体”的界面，仍应把位置写进对应的 <c>TileEntity</c>。</para>
     /// </summary>
     public sealed class UIPositionStore : ModPlayer
     {
@@ -118,7 +116,7 @@ namespace EternalLib
             }
             catch (Exception ex)
             {
-                EternalLog.Error($"读取 UI 面板位置失败，已丢弃：{ex.Message}");
+                EternalLog.Error($"Failed to read saved UI panel positions; they were discarded: {ex.Message}");
                 _positions.Clear();
             }
         }

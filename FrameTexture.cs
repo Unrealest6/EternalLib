@@ -19,9 +19,8 @@ namespace EternalLib
         Grid
     }
     /// <summary>
-    /// 纯 Texture2D 动画帧管理类。
-    /// 支持整图、垂直单方向或二维网格布局。
-    /// tick → 帧索引 的映射在构造时预计算，切割出的帧纹理按需生成并缓存。
+    /// 纯 Texture2D 序列帧管理类，支持整图、垂直单方向与二维网格布局。
+    /// tick → 帧索引映射在构造时预计算，帧纹理按需切割并缓存。
     /// </summary>
     public sealed class FrameTexture
     {
@@ -134,7 +133,7 @@ namespace EternalLib
                 if ((uint)def.FrameIndex >= (uint)frameCount)
                 {
                     throw new ArgumentOutOfRangeException(nameof(frameTimeline),
-                        $"'{name}' 的帧时间轴包含越界帧索引 {def.FrameIndex}（合法范围 0..{frameCount - 1}）。");
+                        $"Frame timeline of '{name}' contains an out-of-range frame index {def.FrameIndex} (valid range 0..{frameCount - 1}).");
                 }
                 int duration = def.ResolveDuration(frameDuration);
                 durations[i] = duration;
@@ -168,7 +167,7 @@ namespace EternalLib
                 return;
             }
             Texture2D sheet = ModContent.Request<Texture2D>(TexturePath, AssetRequestMode.ImmediateLoad).Value
-                              ?? throw new InvalidOperationException($"贴图 '{TexturePath}' 加载失败。");
+                              ?? throw new InvalidOperationException($"Failed to load texture '{TexturePath}'.");
             if (_isSingleImage)
             {
                 _spriteSheet = sheet;
@@ -188,7 +187,7 @@ namespace EternalLib
                 if (sheet.Height % TotalFrames != 0)
                 {
                     throw new ArgumentException(
-                        $"'{Name}' 的图集高度 {sheet.Height} 无法被帧数 {TotalFrames} 整除。");
+                        $"Sheet height {sheet.Height} of '{Name}' is not divisible by the frame count {TotalFrames}.");
                 }
                 _frameWidth = sheet.Width;
                 _frameHeight = sheet.Height / TotalFrames;
@@ -198,7 +197,7 @@ namespace EternalLib
                 if (sheet.Height % Rows != 0 || sheet.Width % Columns != 0)
                 {
                     throw new ArgumentException(
-                        $"'{Name}' 的图集尺寸 {sheet.Width}x{sheet.Height} 无法被网格 {Rows}x{Columns} 整除。");
+                        $"Sheet size {sheet.Width}x{sheet.Height} of '{Name}' is not divisible by the grid {Rows}x{Columns}.");
                 }
                 _frameWidth = sheet.Width / Columns;
                 _frameHeight = sheet.Height / Rows;
@@ -226,7 +225,7 @@ namespace EternalLib
             {
                 // 加载失败只在首次记录一次，避免在绘制循环里反复抛异常刷屏。
                 IsBroken = true;
-                EternalLog.Error($"加载序列帧 '{Name}'（{TexturePath}）失败：{ex.Message}");
+                EternalLog.Error($"Failed to load frame animation '{Name}' ({TexturePath}): {ex.Message}");
             }
         }
         /// <summary>
@@ -308,31 +307,29 @@ namespace EternalLib
         /// <summary>帧纹理的完整源矩形（配合 <see cref="GetCurrentFrame"/> 使用）。</summary>
         public Rectangle GetFrameRect() => new(0, 0, GetFrameSize().X, GetFrameSize().Y);
         /// <summary>释放已切割的帧纹理，保留图集引用；下次访问时按需重新切割。</summary>
-        public void ReleaseFrames()
+        public void ReleaseFrames() => Main.QueueMainThreadAction(DisposeFrames);
+        /// <summary>真正释放帧纹理（必须在主线程调用；可重复调用）。</summary>
+        private void DisposeFrames()
         {
             if (_frameCache is null)
             {
                 return;
             }
-            Main.QueueMainThreadAction(() =>
+            for (int i = 0; i < _frameCache.Length; i++)
             {
-                for (int i = 0; i < _frameCache.Length; i++)
+                Texture2D? frame = _frameCache[i];
+                if (frame is not null && !frame.IsDisposed)
                 {
-                    Texture2D? frame = _frameCache[i];
-                    if (frame is not null && !frame.IsDisposed)
-                    {
-                        frame.Dispose();
-                    }
-                    _frameCache[i] = null;
+                    frame.Dispose();
                 }
-                _frameCache = null;
-            });
+                _frameCache[i] = null;
+            }
+            _frameCache = null;
         }
         internal void Unload()
         {
-            // ModSystem.Unload 执行在主线程上，直接释放即可；
-            // 不要使用 Main.QueueMainThreadAction，卸载后该回调可能不再执行而泄漏显存。
-            ReleaseFrames();
+            //Unload 在主线程执行：同步释放，队列回调在卸载后可能不再执行（会泄漏显存）
+            DisposeFrames();
             _spriteSheet = null;
             _graphicsDevice = null;
             _isLoaded = false;
@@ -400,7 +397,7 @@ namespace EternalLib
                 return;
             }
         }
-        /// <summary>重置到第 0 帧。</summary>
+        /// <summary>重置到时间轴起点（默认时间轴即第 0 帧）。</summary>
         public void Reset() => CurrentTick = 0;
         /// <summary>从头开始播放。</summary>
         public void Restart()

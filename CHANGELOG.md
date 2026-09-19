@@ -1,49 +1,49 @@
 # 变更记录
 
+## 0.33
+
+**范围挖掘的接入方式改为“工具实现接口”（破坏性变更）**
+- 新增 `IAoeMiningTool`：由使用库的模组在自己的工具物品上实现，库只认接口、不保存使用方的数值。
+  * `ExtraDropModifier`：额外掉落表，键是**按物块类型索引的开关表**（`bool[]`，下标 = `Tile.Type`，
+    可直接传 `TileID.Sets.Ore` 这类现成数组），值是 `Int32Modifier`；属性每次读取都重新求值，
+    所以“每格现掷随机倍率”写在 getter 里即可。默认 `null` = 不加成。
+  * `DeliverDrops`：收拢到的掉落交给谁；默认散落到世界（保证东西不会凭空消失）。
+- 删除 `IsAoeMiningActive` / `OreDropMultiplier` 以及更早的静态接入点
+  （`IsAoeTool` / `DeliverDrops` / `OreMultiplierMin` / `OreMultiplierMaxExclusive` / `ShouldCapturePotReward` / `ResetHooks`）。
+  `AoeSwing` 只保留责任人上下文（`new AoeSwing(player)`），形态约定由使用方自己在 `UseItem` 里判断。
+- 新增 `BreakHelper.ApplyExtraDrops(...)`（`ProcessAoeTile` 与 `GetTileItemDrops` 共用）；
+  `GetTileItemDrops(x, y, extraDrops)` 可直接给单块挖掘复用同一张表。
+- 新增注册表 `BreakHelper.RandomLootTiles`（默认含原版罐子 / 回响罐），模组可加入自己的“破坏时现算随机奖励”方块。
+- `FrameItem.GetModeFor(player, item)` 公开：本地玩家读物品实例、远程玩家读 `FramePlayer.HeldItemMode`。
+- **修复**：紧挨箱子的方块被范围挖掘时“挖掉了却什么都不掉”（`Chest.FindChestByGuessing` 会把附近任意格子猜成箱子）；
+  库自己的交付被误报成“漏网掉落”。
+- **协议健壮性**：库内消息枚举写死数值（调整顺序不再改变协议），每个包都带上 `EternalNet.ProtocolVersion`
+  并在接收时校验（不一致直接丢弃并告警）；手持形态快照的条目数加上界校验。
+- **库不再携带使用方数据**：`FrameItem` 不再硬编码使用方的旧存档键（改由使用方覆写 `LegacyModeTagKeys`）；
+  `TileHelper` 的箱子开采与 `BreakHelper` 重复且把内容物直接掉在世界上，已标记为过时并指向 `BreakHelper`。
+- **资源与状态**：`FrameTexture.Unload` 改为同步释放帧纹理（延迟队列在卸载后可能不再执行，会泄漏显存）；
+  漏网告警的调用栈回溯改由 `BreakHelper.BreakDiagnostics`（默认关闭）控制，且计数器随库加载 / 卸载复位。
+- 日志：只在异常时写日志，日志与异常消息统一使用英文，并走 `EternalLog`。
+
+## 0.32
+
+**新增：物块破坏与范围挖掘框架**
+- `BreakHelper`：破坏（屏蔽自动掉落 + 收集窗口）、掉落生成与预测、多格物块左上角归一化、箱子内容物与本体、
+  抹墙、范围挖掘（`AoeSwing` / `ProcessAoeTile` / `FinishAoeSwing`）与多人下的服务端权威结算。
+- `BreakNet`：破坏 / 批量破坏 / 抹墙 / 结算 / 箱子的联机消息（库自己的包通道）。
+- `BreakGlobalTile`（`CanDrop` 屏蔽 + 随机奖励兜底）与 `BreakDropCollector`（生成瞬间收进窗口）；
+  库从此在 `WorldGen.SpawnThingsFromPot` 上挂了唯一的 `On_` detour，且只在范围挖掘上下文里接管。
+
+**新增：序列帧物品形态的存档与联机**
+- `FrameItem` 自带形态的存档与同步（`SaveData` / `LoadData` / `NetSend` / `NetReceive`）与 `Shift + 右键` 切换；
+  新增 `FramePlayer` 按玩家同步手持形态；新增库内网络层 `EternalNet` 与 `ItemHelper`。
+
 ## 0.31
-**修复：Shift+点击子元素被拖拽吞掉**
-- 按住 Shift 点击物品槽/合成槽时，若鼠标停在子元素上，不再触发面板拖拽。
-- 拖拽仍可通过标题栏（`DragHandle`）直接开始。
 
----
+- 修复：Shift 点击子元素被面板拖拽吞掉；`FrameItem.Mode` 会“串味”且丢到地上后重置
+  （`CloneNewInstances` + `Clone` 按物品实例隔离形态）。
 
-## 0.22
+## 0.22 及更早
 
-### 🔧 玩家可见修复
-| 问题 | 修复 |
-|------|------|
-| 无动画物品在背包/世界中不可见 | `PreDrawInInventory/World` 不再错误拦截原版绘制 |
-| 手持武器绘制失效/与其他模组冲突 | 移除 IL 补丁，改用官方 `ModifyItemDraw` 钩子 |
-| 世界掉落物位置偏移 | 锚点改为贴底边，与原版一致 |
-| `Color` 运算符崩溃 | 修正 `Math.Clamp` 参数顺序 |
-| 破坏非箱子方块时崩溃 | 改用 `Chest.DestroyChest`，并修正坐标推断逻辑 |
-| `TriangleWave(0)` 除零崩溃 | 增加零值保护 |
-| `GetRecent` 空引用 | 默认跳过 null/非激活实体；新增 `GetNearest` 替代 LINQ 热路径 |
-
-### 🎮 新增 UI 能力
-- **拖拽面板**：支持拖拽把手（`DragHandle`）、边缘吸附（`SnapDistance`）、Esc 关闭、位置持久化（存角色存档）。
-- **拖拽保护**：拖拽期间自动阻断子元素交互（`BlockChildInputWhileDragging`），防止拖面板时分发物品到槽位。
-- **UI 工具集**：`EternalUI` 提供一键创建面板/标题/关闭按钮/滚动条/列表；`EternalUITextBox` 支持文本变化事件。
-- **全局拖拽状态**：`DragUISession` 提供 `IsAnyPanelDragging` 等跨面板查询。
-
-### ⚠️ 破坏性变更（Breaking Changes）
-- 删除 `FrameItem` 所有 IL 相关钩子（`PlayerGetItemDrawFrameHook` 等），持握绘制迁移至 `ModifyItemDraw`。
-- 删除 `FrameTexture.GetFrameSourceRect(int, int, int)` 重载。
-- `FrameTexture.TotalDuration`：`int?` → `int`。
-- `ColorGradient.Gradients`：可写字典 → `IReadOnlyDictionary`。
-- `FrameTextureSystem.Register*`：返回类型 `FrameTexture?` → `FrameTexture`（非空）。
-- `Player.ResetVelocity` 重命名为 `ClampVelocity`（旧名标记 `[Obsolete]`）。
-
-### 🛠️ 内部质量改进
-- **FrameTexture/FrameTextureSystem**：修复加载失败刷屏、卸载泄漏、整图布局未标记加载、帧越界等问题；新增 `Precache/ReleaseFrames/TotalFrames` 等 API。
-- **ColorGradient**：静态注册表随模组卸载清理；新增 `RegisterOrReplace/Unregister/TryGet`。
-- **ApplyGradient**：逐字符拼接改为有界缓存；修复方括号破坏颜色标签；支持直接传入 `ColorGradient` 实例。
-- **EternalPlayer**：重写飞行状态机（双击跳跃），修复卸装/死亡后状态残留、无输入时漂移。
-- **DragUIState**：基于鼠标位移增量拖拽，修复父级偏移时漂移；新增 `RootElement` 自动推断、`CancelDrag/ClampIntoView`。
-- **DragUISystem**：`ShowUI` 一步完成切换；修复每帧 `new GameTime()` 分配。
-- 移除 `Mono.Cecil` / `MonoMod` / `System.Reflection` 全局 using（无 IL 补丁）。
-- 新增 `EternalLog`（未加载时退化为控制台）、`EternalLibSystem`（集中清理静态状态）。
-
-### 📝 多人同步相关
-- `FrameItem.GetMode` 现在接收 `Player` 与 `Item` 参数，支持按玩家形态绘制，修复多人游戏中其他客户端永远使用形态 0 的问题。
-- 新增 `FrameItemDrawContext`（GlobalItem），使背包图标也能按各自实例形态绘制。
+- 序列帧系统（`FrameTexture` / `FrameTextureSystem`）、渐变文本与颜色运算、UI 工厂与可拖拽面板
+  （出界回弹 / 边缘吸附 / 位置持久化）、带 `TextChanged` 的输入框、自由飞行、`EternalLog`。

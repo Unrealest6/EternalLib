@@ -12,8 +12,7 @@ namespace EternalLib
                     ? text.ApplyGradient(gradient, millisecondsPerColor, direction)
                     : text;
             /// <summary>
-            /// 直接以 <see cref="ColorGradient"/> 实例着色。
-            /// <para>方括号字符不参与着色（原样输出），否则会生成残缺的 <c>[c/...]</c> 标签把整行文本的解析弄坏。</para>
+            /// 直接以 <see cref="ColorGradient"/> 实例着色。方括号字符不参与着色（原样输出），否则会生成残缺的 <c>[c/...]</c> 标签把整行文本的解析弄坏。
             /// </summary>
             public string ApplyGradient(ColorGradient? gradient, double? millisecondsPerColor = null, GradientDirection? direction = null)
             {
@@ -92,6 +91,102 @@ namespace EternalLib
                 Math.Clamp(player.velocity.X, -Math.Abs(maxVelocity.X), Math.Abs(maxVelocity.X)),
                 Math.Clamp(player.velocity.Y, -Math.Abs(maxVelocity.Y), Math.Abs(maxVelocity.Y)));
         }
+        private static readonly ConcurrentDictionary<string, Action<Item, Item>> BundleCache = new();
+        extension(Item item)
+        {
+            public Item Clone(params Expression<Func<Item, object>>[] members)
+            {
+                Item clone = item.Clone();
+                if (members.Length == 0)
+                {
+                    return clone;
+                }
+                Item.GetOrCompileBundle(members)(item, clone);
+                return clone;
+            }
+            private static Action<Item, Item> GetOrCompileBundle(Expression<Func<Item, object>>[] members)
+            {
+                string key = Item.BuildKey(members);
+                if (BundleCache.TryGetValue(key, out Action<Item, Item>? cached))
+                {
+                    return cached;
+                }
+                Action<Item, Item> compiled = Item.BuildBundle(members);
+                BundleCache[key] = compiled;
+                return compiled;
+            }
+            private static string BuildKey(Expression<Func<Item, object>>[] members)
+            {
+                StringBuilder sb = new(members.Length * 32);
+                for (int i = 0; i < members.Length; i++)
+                {
+                    if (i > 0)
+                    {
+                        sb.Append('|');
+                    }
+                    Expression body = members[i].Body.Unwrap();
+                    while (body is MemberExpression member)
+                    {
+                        sb.Append(member.Member.DeclaringType?.Name);
+                        sb.Append('.');
+                        sb.Append(member.Member.Name);
+                        sb.Append('/');
+                        body = member.Expression!;
+                    }
+                }
+                return sb.ToString();
+            }
+            private static Action<Item, Item> BuildBundle(Expression<Func<Item, object>>[] members)
+            {
+                ParameterExpression sourceParam = Expression.Parameter(typeof(Item), "source");
+                ParameterExpression targetParam = Expression.Parameter(typeof(Item), "target");
+                Expression[] assignments = new Expression[members.Length];
+                for (int i = 0; i < members.Length; i++)
+                {
+                    Expression body = members[i].Body.Unwrap();
+                    if (body is not MemberExpression final)
+                    {
+                        throw new ArgumentException($"Expression must be a member access: {members[i]}");
+                    }
+                    bool writable = final.Member switch
+                    {
+                        FieldInfo { IsInitOnly: false, IsLiteral: false } => true,
+                        PropertyInfo { CanWrite: true } p when p.GetIndexParameters().Length == 0 => true,
+                        _ => false
+                    };
+                    if (!writable)
+                    {
+                        throw new ArgumentException($"Member is not writable: {final.Member.Name}");
+                    }
+                    Expression sourceAccess = body.RebuildAccess(sourceParam);
+                    Expression targetAccess = body.RebuildAccess(targetParam);
+                    assignments[i] = Expression.Assign(targetAccess, sourceAccess);
+                }
+                Expression block = Expression.Block(assignments);
+                return Expression.Lambda<Action<Item, Item>>(block, sourceParam, targetParam).Compile();
+            }
+        }
+        extension(Expression expr)
+        {
+            private Expression Unwrap() => expr is UnaryExpression { NodeType: ExpressionType.Convert } unary ? unary.Operand : expr;
+            private Expression RebuildAccess(ParameterExpression root)
+            {
+                expr = expr.Unwrap();
+                List<MemberInfo> chain = [];
+                Expression? current = expr;
+                while (current is MemberExpression member)
+                {
+                    chain.Add(member.Member);
+                    current = member.Expression;
+                }
+                if (current is not ParameterExpression)
+                {
+                    throw new ArgumentException($"Expression must start from a parameter: {expr}");
+                }
+                chain.Reverse();
+                return chain.Aggregate<MemberInfo, Expression>(root, Expression.MakeMemberAccess);
+            }
+        }
         extension<T>(T[] entities) where T : Entity
         {
             /// <summary>取离指定实体最近、活跃的实体。</summary>
@@ -112,15 +207,12 @@ namespace EternalLib
                         continue;
                     }
                     float distanceSq = candidate.DistanceSQ(center);
-                    if (distanceSq > maxDistanceSq)
+                    if (distanceSq > maxDistanceSq || best is not null && !(distanceSq < bestDistanceSq))
                     {
                         continue;
                     }
-                    if (best is null || distanceSq < bestDistanceSq)
-                    {
-                        best = candidate;
-                        bestDistanceSq = distanceSq;
-                    }
+                    best = candidate;
+                    bestDistanceSq = distanceSq;
                 }
                 return best;
             }
@@ -145,15 +237,12 @@ namespace EternalLib
                         continue;
                     }
                     float distanceSq = candidate.DistanceSQ(center);
-                    if (distanceSq > maxDistanceSq)
+                    if (distanceSq > maxDistanceSq || best is not null && !(distanceSq < bestDistanceSq))
                     {
                         continue;
                     }
-                    if (best is null || distanceSq < bestDistanceSq)
-                    {
-                        best = candidate;
-                        bestDistanceSq = distanceSq;
-                    }
+                    best = candidate;
+                    bestDistanceSq = distanceSq;
                 }
                 return best;
             }

@@ -2,7 +2,7 @@ namespace EternalLib
 {
     /// <summary>
     /// 拖拽 UI 的宿主系统：负责界面层级、状态切换与每帧更新。
-    /// <para>泛型参数 <typeparamref name="T"/> 为自身类型（CRTP），用于让每个 UI 拥有独立的静态状态。</para>
+    /// <para>泛型参数 <typeparamref name="T"/> 为自身类型（CRTP），使每个 UI 拥有独立的静态状态。</para>
     /// </summary>
     public abstract class DragUISystem<T, TState> : ModSystem
         where T : DragUISystem<T, TState> where TState : DragUIState<UIPanel>
@@ -62,8 +62,7 @@ namespace EternalLib
                 return;
             }
             UserInterface = new UserInterface();
-            //拖拽开始时清掉本界面的“按下缓存”：原版点击是在松手时按“按下那一刻记录的目标”派发的，
-            //不清掉的话，拖拽结束时的这次松手会直接触发拖拽开始前按下的按钮（例如关闭按钮）。
+            // 拖拽开始时清掉本界面的按下缓存：原版点击在松手时按“按下那一刻记录的目标”派发，不清掉就会误触发拖拽前按下的按钮。
             DragUISession.DragStarted += ClearPendingClicks;
         }
         public override void Unload()

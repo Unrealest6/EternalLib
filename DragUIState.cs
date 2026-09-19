@@ -1,12 +1,8 @@
 namespace EternalLib
 {
     /// <summary>
-    /// 可拖拽 UI 状态基类。
-    /// <para>派生类在 <c>OnInitialize</c> 中创建根元素并赋给 <see cref="Element"/>（或直接 <c>Append</c>），
-    /// 拖拽由基类自动处理；松手后自动回弹到屏幕内。</para>
-    /// <para>扩展能力：标题栏拖拽（<see cref="DragHandle"/>）、修饰键拖拽（<see cref="RequireModifierKey"/>）、
-    /// 边缘吸附（<see cref="SnapDistance"/>）、Esc 关闭（<see cref="CloseOnEscape"/> + <see cref="CloseRequested"/>）、
-    /// 位置持久化（<see cref="PositionKey"/>）、拖拽期间屏蔽子元素输入（<see cref="BlockChildInputWhileDragging"/>）。</para>
+    /// 可拖拽 UI 状态基类：派生类在 <c>OnInitialize</c> 中创建根元素并赋给 <see cref="Element"/>，拖拽、越界回弹与松手贴边由基类处理。
+    /// 可选能力见 <see cref="DragHandle"/>、<see cref="RequireModifierKey"/>、<see cref="SnapDistance"/>、<see cref="CloseOnEscape"/>、<see cref="PositionKey"/>、<see cref="BlockChildInputWhileDragging"/>。
     /// </summary>
     public abstract class DragUIState<T> : UIState where T : UIElement
     {
@@ -24,9 +20,7 @@ namespace EternalLib
         protected virtual float SpringStrength => 0.2f;
         /// <summary>
         /// 在面板本体（非 <see cref="DragHandle"/>）上拖拽时是否必须按住 <see cref="Key"/>。
-        /// 设为 <c>false</c> 时必须同时设置 <see cref="DragHandle"/>，否则面板内任意点击
-        /// （例如点击物品格）都会被当成拖拽起点。
-        /// <para>无论本项如何设置，落在子元素上的按下都不会起拖（见 <see cref="IsOverChild"/>）。</para>
+        /// <para>设为 <c>false</c> 时必须同时设置 <see cref="DragHandle"/>，否则面板内任意点击都会被当成拖拽起点；落在子元素上的按下永不起拖（见 <see cref="IsOverChild"/>）。</para>
         /// </summary>
         protected virtual bool RequireModifierKey => true;
         /// <summary>
@@ -40,15 +34,13 @@ namespace EternalLib
         /// <summary>是否允许 Esc 关闭。默认关闭，避免与宿主自己实现的 Esc 处理重复触发。</summary>
         protected virtual bool CloseOnEscape => false;
         /// <summary>
-        /// 位置持久化键。设置后，界面打开时会自动从 <see cref="UIPositionStore"/> 恢复位置，
-        /// 关闭时自动保存（不覆盖派生类的 <c>OnActivate</c>/<c>OnDeactivate</c> 时才生效）。
+        /// 位置持久化键。设置后，界面打开时自动从 <see cref="UIPositionStore"/> 恢复位置，关闭时自动保存。
+        /// <para>派生类重写 <c>OnActivate</c>/<c>OnDeactivate</c> 时必须调用 base，否则本项失效。</para>
         /// </summary>
         protected virtual string? PositionKey => null;
         /// <summary>
-        /// 拖拽期间是否让面板（以及全部子元素）完全忽略鼠标。
-        /// <para>这是防止“拖面板时误触面板内的按钮/物品格”的关键：tModLoader 的
-        /// <c>UIElement.GetElementAt</c> 会跳过带 <c>IgnoresMouseInteraction</c> 的元素<strong>及其整棵子树</strong>，
-        /// 因此把根元素的该标记置位后，子元素在本帧不会被命中，也不会收到任何点击。</para>
+        /// 拖拽期间是否让面板及其全部子元素完全忽略鼠标，避免拖面板时误触内部按钮或物品格。
+        /// <para>tModLoader 的 <c>UIElement.GetElementAt</c> 会跳过带 <c>IgnoresMouseInteraction</c> 的元素及其整棵子树，故只需置位根元素。</para>
         /// </summary>
         protected virtual bool BlockChildInputWhileDragging => true;
         /// <summary>界面请求关闭（Esc 或调用 <see cref="RequestClose"/>）。由 <see cref="DragUISystem{T,TState}"/> 接管。</summary>
@@ -63,8 +55,7 @@ namespace EternalLib
         private bool _isRebounding;
         private Vector2 _reboundVelocity;
         /// <summary>
-        /// 当前可拖拽的根元素。未显式赋值 <see cref="Element"/> 时自动采用第一个类型匹配的子元素，
-        /// 避免派生类忘记赋值时拖拽功能静默失效。
+        /// 当前可拖拽的根元素。未显式赋值 <see cref="Element"/> 时自动取第一个类型匹配的子元素。
         /// </summary>
         protected T? RootElement
         {
@@ -129,10 +120,7 @@ namespace EternalLib
             }
             else if (buttonDown && !_dragButtonHeld)
             {
-                //「面板本体」起拖要求鼠标下不是子元素：物品格、按钮、列表这些子元素有自己的点击语义，
-                //一旦被当成拖拽起点，StartDrag 会丢弃按下缓存（见 DragUISession.DiscardPendingClicks），
-                //这一次点击就永远不会被派发——典型现象是「按住 Shift 点击合成槽」完全没反应。
-                //把手（标题栏）不受此限制，仍然可以直接拖。
+                // 面板本体起拖要求鼠标下不是子元素：StartDrag 会丢弃按下缓存（见 DragUISession.DiscardPendingClicks），否则这次点击不会被派发（如按住 Shift 点合成槽无反应）；把手不受此限制。
                 bool canStart = overHandle || (overPanel && !IsOverChild(element) && (!RequireModifierKey || Main.keyState.IsKeyDown(Key)));
                 if (canStart)
                 {
@@ -209,9 +197,8 @@ namespace EternalLib
             element.Recalculate();
         }
         /// <summary>
-        /// 鼠标是否正停在面板内的某个子元素上。
-        /// <para>只检查直接子元素即可：<c>IsMouseHovering</c> 会沿父链向上传递，
-        /// 鼠标落在更深层的元素上时，包含它的每一层（含直接子元素）都会是 <c>true</c>。</para>
+        /// 鼠标是否停在面板内的某个直接子元素上。
+        /// <para><c>IsMouseHovering</c> 会沿父链向上传递，鼠标落在更深层元素上时包含它的每层都会为 <c>true</c>，故只查直接子元素即可。</para>
         /// </summary>
         private static bool IsOverChild(UIElement element)
         {

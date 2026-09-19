@@ -2,7 +2,11 @@ namespace EternalLib
 {
     /// <summary>
     /// 物块相关操作的安全封装。
+    /// <para>[已过时] 箱子开采请改用 <see cref="BreakHelper.TakeChestLoot"/>（单人 / 服务端）与
+    /// <see cref="BreakHelper.LootAndBreakChestOnServer"/>（服务端权威）：它们会把内容物交给掉落收集窗口，
+    /// 而这里会直接把内容物掉在世界上。</para>
     /// </summary>
+    [Obsolete("Use BreakHelper.TakeChestLoot / LootAndBreakChestOnServer instead.")]
     public static class TileHelper
     {
         /// <summary>
@@ -25,8 +29,7 @@ namespace EternalLib
         public static bool TryProcessChestMining(int x, int y, bool drop, out Item[] items)
         {
             items = [];
-            // 旧实现用 TileFrameX/Y % 36 猜测箱子左上角，调用方若是先做过一次同样的修正
-            // 就会整体偏移一格；FindChestByGuessing 允许传入箱子范围内任意一格，稳健得多。
+            // FindChestByGuessing：传入箱子范围内任意一格都能命中，不像按 TileFrameX/Y % 36 猜左上角那样会因坐标修正整体偏移一格
             int chestIndex = Chest.FindChestByGuessing(x, y);
             if (chestIndex < 0 || chestIndex >= Main.chest.Length || Main.chest[chestIndex] is not { } chest)
             {
@@ -39,9 +42,7 @@ namespace EternalLib
                 NetMessage.SendData(MessageID.RequestChestOpen, number: chestX, number2: chestY);
             }
             items = SaveChestContents(chest);
-            // 必须先清空箱子数据再破坏物块，否则原版会在 KillTile 里把箱内物品再掉一次；
-            // 旧实现直接给 Main.chest[index] 赋 null 并手动清空 item 数组，
-            // 既跳过了原版的同步逻辑，也会在 index 为 -1 时抛 IndexOutOfRangeException。
+            // 必须先清空箱子数据再破坏物块，否则原版 KillTile 会把箱内物品再掉一次；DestroyChest 同时负责多人同步
             Chest.DestroyChest(chestX, chestY);
             if (Main.netMode != NetmodeID.SinglePlayer)
             {
