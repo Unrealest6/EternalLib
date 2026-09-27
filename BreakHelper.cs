@@ -61,11 +61,13 @@ namespace EternalLib
         /// 会忽略它，箱子 / 工作台 / 收集器都会额外掉一份。</para>
         /// </summary>
         public static bool SuppressTileDrops { get; private set; }
-
         /// <summary>
         /// 破坏一格物块：本地立即破坏，多人客户端同时请求服务端破坏
         /// （掉落要由调用方自己用 <see cref="TryGetDrop"/> / <see cref="SpawnDrop"/> 产出）。
         /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="noItem"></param>
         /// <param name="sink">非 null 时，破坏过程中游戏自己生成的掉落（见 <see cref="IsRandomLootTile"/>）
         /// 会被收进这个收集窗口，而不是留在世界上。</param>
         public static void BreakTile(int x, int y, bool noItem = true, List<Item>? sink = null)
@@ -292,13 +294,13 @@ namespace EternalLib
         /// <para>表里的键是按物块类型索引的开关表（下标 = <c>Tile.Type</c>），命中的每一项依次套用。</para>
         /// </summary>
         public static void ApplyExtraDrops(List<Item> drops, int fromIndex, int tileType,
-            IReadOnlyDictionary<bool[], Int32Modifier>? extraDrops)
+            IReadOnlyDictionary<bool[], NumericModifier<int>>? extraDrops)
         {
             if (extraDrops is null || drops.Count <= fromIndex)
             {
                 return;
             }
-            foreach ((bool[] mask, Int32Modifier modifier) in extraDrops)
+            foreach ((bool[] mask, NumericModifier<int> modifier) in extraDrops)
             {
                 if (tileType >= mask.Length || !mask[tileType])
                 {
@@ -618,7 +620,6 @@ namespace EternalLib
             //（<c>Tile.ClearTile</c>），破坏之后再读 <c>tile.TileType</c> 只会读到空气——
             //矿石倍率判定（<see cref="TileID.Sets.Ore"/>）与日志里的方块类型都会因此静默失效。
             int tileType = tile.TileType;
-            bool isOre = TileID.Sets.Ore[tileType];
             bool isPot = IsRandomLootTile(tileType);
             Point16 origin = GetAoeOrigin(tile, x, y);
             if (!swing.ProcessedOrigins.Add(origin))
@@ -745,8 +746,10 @@ namespace EternalLib
         /// <para>必须在方块尚未被破坏时调用：既要读类型来套 <paramref name="extraDrops"/>，
         /// 原版掉落表也要读帧坐标。</para>
         /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
         /// <param name="extraDrops">额外掉落表（见 <see cref="IAoeMiningTool.ExtraDropModifier"/>）；null = 不加成</param>
-        public static List<Item> GetTileItemDrops(int x, int y, IReadOnlyDictionary<bool[], Int32Modifier>? extraDrops = null)
+        public static List<Item> GetTileItemDrops(int x, int y, IReadOnlyDictionary<bool[], NumericModifier<int>>? extraDrops = null)
         {
             List<Item> drops = [];
             if (!InBounds(x, y))
@@ -894,6 +897,8 @@ namespace EternalLib
         /// </summary>
         /// <param name="chest">箱子实例</param>
         /// <param name="chestIndex">箱子在 <see cref="Main.chest"/> 中的下标</param>
+        /// <param name="chestX"></param>
+        /// <param name="chestY"></param>
         /// <param name="dropContents">是否把内容物直接掉落到世界中（调用方不想自己处理掉落时用）</param>
         /// <param name="lootSink">
         /// 非 null 时用原版掉落函数把箱子本体的掉落收进这里（必须在清空数据之前算，函数要读帧坐标判断风格）；
@@ -949,6 +954,8 @@ namespace EternalLib
         /// <summary>
         /// 破坏箱子占用的多格物块。
         /// </summary>
+        /// <param name="originX"></param>
+        /// <param name="originY"></param>
         /// <param name="sink">
         /// 非 null 时用“带掉落的破坏”把掉落收进它（原版掉落函数算不出箱子本体时的兜底）；
         /// null 则屏蔽掉落。

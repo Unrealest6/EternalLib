@@ -111,7 +111,7 @@ namespace EternalLib
         {
             foreach (FrameTexture anim in Animations.Values)
             {
-                anim.Unload();
+                anim.ReleaseFrames();
             }
             Animations.Clear();
         }

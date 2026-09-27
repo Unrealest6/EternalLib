@@ -123,10 +123,10 @@ public sealed class MyTool : FrameItem
 // 工具自己的规则：哪些物块要额外产出、收拢到的掉落交给谁
 public sealed class MyAoeTool : ModItem, IAoeMiningTool
 {
-    public IReadOnlyDictionary<bool[], Int32Modifier>? ExtraDropModifier => new Dictionary<bool[], Int32Modifier>
+    public IReadOnlyDictionary<bool[], NumericModifier<int>>? ExtraDropModifier => new Dictionary<bool[], NumericModifier<int>>
     {
-        [TileID.Sets.Ore] = new Int32Modifier(Main.rand.Next(4, 41)),   // 矿石 ×4~40（每格现掷一次）
-        [TileID.Sets.CanBeDugByShovel] = new Int32Modifier(2)           // 任何别的物块也能这样加倍
+        [TileID.Sets.Ore] = new NumericModifier<int>(Main.rand.Next(4, 41)),   // 矿石 ×4~40（每格现掷一次）
+        [TileID.Sets.CanBeDugByShovel] = new NumericModifier<int>(2)           // 任何别的物块也能这样加倍
     };
     public void DeliverDrops(Player? player, List<Item> drops, Vector2 position)
         => MyContainer.Pack(drops, position);                              // 默认散落到世界
@@ -135,7 +135,7 @@ public sealed class MyAoeTool : ModItem, IAoeMiningTool
 
 * `ExtraDropModifier` 的**键是按物块类型索引的开关表**（`bool[]`，下标 = `Tile.Type`），
   所以可以直接传 `TileID.Sets.Ore` 这类现成的 `bool[]`，也可以自己造一张表只点亮某几个类型；
-  值是 <see cref="Int32Modifier"/>（`ApplyTo(x) = (x + Base) * Additive * Multiplicative + Flat`）。
+  值是 <see cref="NumericModifier<int>"/>（`ApplyTo(x) = (x + Base) * Additive * Multiplicative + Flat`）。
   该属性**每格读取一次并重新求值**，所以“每格随机倍率”直接写在 getter 里即可。
 * 两个成员都有默认实现：不想要额外掉落就不必实现 `ExtraDropModifier`（默认 `null` = 不加成）；
   `DeliverDrops` 的默认实现是散落到世界（任何情况下东西都不会凭空消失）。

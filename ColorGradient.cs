@@ -13,9 +13,7 @@ namespace EternalLib
     {
         /// <summary>默认每种颜色的停留时间（毫秒，约等于 60 FPS 的一帧）。</summary>
         public const double DefaultMillisecondsPerColor = 1000.0 / 60.0;
-        private const int MaxCacheEntries = 256;
         private static readonly Dictionary<string, ColorGradient> Registry = [];
-        private static readonly Dictionary<GradientCacheKey, string> TextCache = [];
         /// <summary>已注册的渐变（只读视图，写入请使用 <see cref="Register"/> / <see cref="RegisterOrReplace"/>）。</summary>
         public static IReadOnlyDictionary<string, ColorGradient> Gradients => Registry;
         public Color[] Colors { get; }
@@ -29,7 +27,12 @@ namespace EternalLib
             double millisecondsPerColor = DefaultMillisecondsPerColor,
             GradientDirection direction = GradientDirection.Left)
         {
-            if (string.IsNullOrEmpty(key) || Registry.ContainsKey(key))
+            if (string.IsNullOrEmpty(key))
+            {
+                return false;
+            }
+            key = ModLoader.Mods.FirstOrDefault(mod => mod.Code == Assembly.GetCallingAssembly())?.Name ?? "" + key;
+            if (Registry.ContainsKey(key))
             {
                 return false;
             }
@@ -47,21 +50,22 @@ namespace EternalLib
             {
                 return false;
             }
+            key = ModLoader.Mods.FirstOrDefault(mod => mod.Code == Assembly.GetCallingAssembly())?.Name ?? "" + key;
             Registry[key] = new ColorGradient(colors, millisecondsPerColor, direction);
-            TextCache.Clear();
             return true;
         }
         /// <summary>移除一个渐变。</summary>
         public static bool Unregister(string key)
         {
+            key = ModLoader.Mods.FirstOrDefault(mod => mod.Code == Assembly.GetCallingAssembly())?.Name ?? "" + key;
             bool removed = Registry.Remove(key);
-            if (removed)
-            {
-                TextCache.Clear();
-            }
             return removed;
         }
-        public static bool TryGet(string key, out ColorGradient gradient) => Registry.TryGetValue(key, out gradient!);
+        public static bool TryGet(string key, out ColorGradient gradient)
+        {
+            key = ModLoader.Mods.FirstOrDefault(mod => mod.Code == Assembly.GetCallingAssembly())?.Name ?? "" + key;
+            return Registry.TryGetValue(key, out gradient!);
+        }
         private ColorGradient(Color[]? colors,
             double millisecondsPerColor = DefaultMillisecondsPerColor,
             GradientDirection direction = GradientDirection.Left)
@@ -85,22 +89,9 @@ namespace EternalLib
             int step = (int)(elapsedMilliseconds / interval % Colors.Length);
             return step < 0 ? step + Colors.Length : step;
         }
-        /// <summary>带缓存的文本着色结果，避免同一个 tooltip 每帧重复拼接字符串。</summary>
-        internal static bool TryGetCached(in GradientCacheKey key, out string? value) => TextCache.TryGetValue(key, out value);
-        internal static void StoreCached(in GradientCacheKey key, string value)
-        {
-            if (TextCache.Count >= MaxCacheEntries)
-            {
-                TextCache.Clear();
-            }
-            TextCache[key] = value;
-        }
         internal static void ClearAll()
         {
             Registry.Clear();
-            TextCache.Clear();
         }
-        /// <summary>按文本 + 渐变 + 色序号缓存，色序号变化时会自然失效。</summary>
-        internal readonly record struct GradientCacheKey(string Text, ColorGradient Gradient, int Step, bool Reverse);
     }
 }

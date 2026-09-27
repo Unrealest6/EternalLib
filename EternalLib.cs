@@ -29,7 +29,7 @@ namespace EternalLib
     public class EternalLib : Mod
     {
         /// <summary>库的 API 版本，供依赖方进行特性探测。</summary>
-        public const string ApiVersion = "0.33";
+        public const string ApiVersion = "0.34";
         /// <summary>
         /// 库内消息入口。依赖方不需要知道库的包格式，只需要实现自己的 <c>HandlePacket</c>。
         /// </summary>
