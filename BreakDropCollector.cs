@@ -17,7 +17,7 @@ namespace EternalLib
         internal static void ResetLeakLog() => _leakLogCount = 0;
         public override void OnSpawn(Item item, IEntitySource source)
         {
-            if (item is not { active: true } || item.IsAir || item.stack <= 0)
+            if (item is { active: false } || item.IsAir || item.stack <= 0)
             {
                 return;
             }
@@ -26,11 +26,10 @@ namespace EternalLib
                 LogLeak(item);
                 return;
             }
-            int slot = item.whoAmI;
-            if (slot < 0 || slot >= Main.item.Length || !ReferenceEquals(Main.item[slot], item))
+            int slot = Array.IndexOf(Main.item, item);
+            if (slot == -1)
             {
-                //whoAmI 可能还没写好，按引用再找一次
-                slot = Array.IndexOf(Main.item, item);
+                return;
             }
             //原样收走这个实例（maxStack 与 ModItem 数据都在它身上），世界里的槽位换成新物品。
             //绝不能对它调用 TurnToAir()：那样收到的是一个空物品，掉落会“哪里都没有”。

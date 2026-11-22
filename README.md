@@ -16,7 +16,7 @@ consumer mod through an interface, so several mods can use the library at the sa
   on the server in multiplayer.
 * **Frame animation items** — `FrameItem` / `FrameTexture` / `FramePlayer`: vertical or grid sheets with
   per-frame durations, multiple forms per item instance (saved and synced automatically).
-* **UI toolkit** — `DragUIState<T>` (draggable panels with snapping and persisted position), `EternalUI`
+* **UI toolkit** — `IDraggablePanel<T>` + `DragPanelController<T>` (draggable panels with snapping and persisted position; composition, not inheritance), `EternalUI`
   factories, a text box with `TextChanged`, `ColorGradient` for gradient text.
 * **Misc** — `EternalLog` (auto-detects the calling mod's logger), `EternalExtension` (gradients, colors,
   nearest-entity queries, flight), `TileHelper`, `EternalPlayer`.
@@ -57,7 +57,7 @@ Licensed under the MIT license. Used by [AvaritiaMod](https://github.com/Unreale
 | `EternalExtension` | static class | 字符串渐变着色、颜色明暗运算、`Player` 飞行、最近实体查询、容差比较、三角波 |
 | `EternalPlayer` | ModPlayer | `player.CanFly = true` + 空中双击跳跃键 切换自由飞行 |
 | `TileHelper` | static class | 箱子类物块的安全开采与内容物提取 |
-| `DragUIState<T>` / `DragUISystem<T,TState>` | UIState / ModSystem | 可拖拽面板，带出界回弹、边缘吸附、标题栏拖拽、Esc 关闭与位置持久化 |
+| `IDraggablePanel<T>` / `DragPanelController<T>` / `DragPanelHost` / `DragPanelSystem` | 全部为接口或普通类（仅驱动系统是 ModSystem） | 可拖拽面板：出界回弹、边缘吸附、标题栏拖拽、Esc 关闭、位置持久化。接口定契约、控制器管行为、宿主管显示，全无泛型基类 |
 | `EternalUI` | static class | 面板 / 标题 / 关闭按钮 / 滚动条列表 工厂 |
 | `EternalUITextBox` | UITextBox | 带占位符与 `TextChanged` 事件的输入框 |
 | `UIPositionStore` | ModPlayer | 按角色存档持久化面板位置 |
@@ -192,19 +192,33 @@ if (TileHelper.TryProcessChestMining(x, y, drop: false, out Item[] items)) { /* 
 ### 拖拽面板
 
 ```csharp
-public sealed class MyPanelUI : DragUIState<UIPanel>
+public sealed class MyPanelUI : UIState, IDraggablePanel<UIPanel>
 {
-    // 位置随角色存档持久化；不设置则每次打开都用默认位置
-    protected override string? PositionKey => "MyMod/MyPanel";
-    // 只允许拖动标题栏，因此不需要再按住 Shift
-    protected override UIElement? DragHandle => _title;
-    protected override bool RequireModifierKey => false;
-    // 松手时距离屏幕边缘 24 像素内自动贴边
-    protected override float SnapDistance => 24f;
-    // 允许 Esc 关闭（此时可以删掉宿主里自己写的 Escape 处理）
-    protected override bool CloseOnEscape => true;
+    // 组合：拖拽逻辑全在控制器里，UI 只持有它并把三个生命周期转调过去
+    public DragPanelController<UIPanel> DragPanel { get; }
+    public UIState State => this;
+    public UIPanel? Element
+    {
+        get => DragPanel.Element;
+        set => DragPanel.Element = value;
+    }
+    // 下列配置项都有默认实现，需要改哪个才写哪个
+    public string? PositionKey => "MyMod/MyPanel";   // 位置随角色存档持久化
+    public UIElement? DragHandle => _title;          // 只允许拖标题栏，因此不需要按住 Shift
+    public bool RequireModifierKey => false;
+    public float SnapDistance => 24f;                // 离屏幕边缘 24 像素内自动贴边
+    public bool CloseOnEscape => true;
 
     private UIText? _title;
+
+    public MyPanelUI() => DragPanel = new DragPanelController<UIPanel>(this);
+    public override void OnActivate() => DragPanel.OnActivate();
+    public override void OnDeactivate() => DragPanel.OnDeactivate();
+    public override void Update(GameTime gameTime)
+    {
+        base.Update(gameTime);
+        DragPanel.Update();
+    }
 
     public override void OnInitialize()
     {

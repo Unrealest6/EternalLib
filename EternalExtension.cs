@@ -171,6 +171,84 @@ namespace EternalLib
                 SoundEngine.PlaySound(SoundID.MenuTick);
             }
         }
+        extension(Tile tile)
+        {
+            /// <summary>
+            /// 把多格方块（箱子等）的任意一格换算成左上角坐标。
+            /// <para>原版与 tModLoader 的多格判定都以左上角为准，帧坐标每 36 像素（2 格）为一组：
+            /// 右列/下行的帧坐标不是 36 的整数倍，各减一格才是左上角。</para>
+            /// </summary>
+            public Point16 GetMultiTileOrigin(int x, int y)
+            {
+                int originX = x;
+                int originY = y;
+                if (tile.TileFrameX % 36 != 0)
+                {
+                    originX--;
+                }
+                if (tile.TileFrameY % 36 != 0)
+                {
+                    originY--;
+                }
+                return new Point16(originX, originY);
+            }
+        }
+        extension(Chest chest)
+        {
+            /// <summary>
+            /// 清空箱子物品栏并破坏箱子占用的多格物块。
+            /// </summary>
+            /// <param name="chest">箱子实例</param>
+            /// <param name="chestIndex">箱子在 <see cref="Main.chest"/> 中的下标</param>
+            /// <param name="chestX"></param>
+            /// <param name="chestY"></param>
+            /// <param name="dropContents">是否把内容物直接掉落到世界中（调用方不想自己处理掉落时用）</param>
+            /// <param name="lootSink">
+            /// 非 null 时用原版掉落函数把箱子本体的掉落收进这里（必须在清空数据之前算，函数要读帧坐标判断风格）；
+            /// null 表示不需要这份掉落（例如多人客户端只清理本地副本）。
+            /// </param>
+            public void ClearAndBreakChest(int chestIndex, int chestX, int chestY, bool dropContents, List<Item>? lootSink = null)
+            {
+                //先清空内容物：DestroyChest 在箱内还有物品时会失败，方块也就破坏不掉
+                Item[] slots = chest.item;
+                for (int i = 0; i < slots.Length; i++)
+                {
+                    Item slot = slots[i];
+                    if (slot.IsAir || slot.stack <= 0)
+                    {
+                        continue;
+                    }
+                    if (dropContents)
+                    {
+                        BreakHelper.SpawnDrop(chestX, chestY, slot.Clone());
+                    }
+                    slots[i] = new Item();
+                }
+                if (!Chest.DestroyChest(chestX, chestY) && chestIndex >= 0 && chestIndex < Main.chest.Length)
+                {
+                    //兜底：直接清掉数据槽，避免箱子永远处于“不可破坏”状态
+                    Main.chest[chestIndex] = null;
+                }
+                if (lootSink is null)
+                {
+                    BreakHelper.BreakChestTiles(chestX, chestY);   // 没有 sink 时不需要箱子本体掉落
+                    return;
+                }
+                //箱子本体：先问原版掉落函数；拿不到就让引擎自己掉一份并用窗口接住（此时数据已清空，破坏得掉）
+                int before = lootSink.Count;
+                BreakHelper.GenerateTileDrops(chestX, chestY, lootSink);
+                if (lootSink.Count == before)
+                {
+                    BreakHelper.BreakChestTiles(chestX, chestY, lootSink);
+                    if (lootSink.Count == before)
+                    {
+                        lootSink.AddRange(BreakHelper.GetTileItemDrops(chestX, chestY));   // 最后兜底：预测一份
+                    }
+                    return;
+                }
+                BreakHelper.BreakChestTiles(chestX, chestY);
+            }
+        }
         private static readonly ConcurrentDictionary<string, Action<Item, Item>> BundleCache = new();
         extension(Item item)
         {

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace EternalLib
 {
     /// <summary>
@@ -17,25 +19,6 @@ namespace EternalLib
         public static void RequestServerKillTile(int x, int y, bool noItem = true) => BreakNet.RequestServerKillTile(x, y, noItem);
         /// <summary>批量请求服务端破坏物块（多人客户端用，一次可携带多格坐标）。</summary>
         public static void RequestServerKillTiles(IReadOnlyList<Point16> tiles, bool noItem = true) => BreakNet.RequestServerKillTiles(tiles, noItem);
-        /// <summary>
-        /// 把多格方块（箱子等）的任意一格换算成左上角坐标。
-        /// <para>原版与 tModLoader 的多格判定都以左上角为准，帧坐标每 36 像素（2 格）为一组：
-        /// 右列/下行的帧坐标不是 36 的整数倍，各减一格才是左上角。</para>
-        /// </summary>
-        public static Point16 GetMultiTileOrigin(Tile tile, int x, int y)
-        {
-            int originX = x;
-            int originY = y;
-            if (tile.TileFrameX % 36 != 0)
-            {
-                originX--;
-            }
-            if (tile.TileFrameY % 36 != 0)
-            {
-                originY--;
-            }
-            return new Point16(originX, originY);
-        }
         /// <summary>
         /// 取指定物块的原版掉落（包含概率、条件与运气等全部判定）。
         /// </summary>
@@ -457,7 +440,7 @@ namespace EternalLib
         /// <summary>诊断用：当前调用栈的前几帧——漏网的掉落是谁生成的，一眼就能看出来。</summary>
         public static string DescribeCaller(int frames = 8)
         {
-            System.Diagnostics.StackTrace trace = new(2, false);
+            StackTrace trace = new(2, false);
             List<string> names = [];
             for (int i = 0; i < trace.FrameCount && names.Count < frames; i++)
             {
@@ -512,18 +495,13 @@ namespace EternalLib
         /// 范围挖掘“一次挥动”的结算状态：掉落、已结算的多格物块、需要服务端结算的坐标，
         /// 以及责任人（谁在挖、用哪件工具）——额外掉落与交付策略都取自这件工具实例。
         /// </summary>
-        public sealed class AoeSwing
+        /// <remarks>按玩家手持物品解析责任人。</remarks>
+        public sealed class AoeSwing(Player? player = null)
         {
             /// <summary>发起这次挥动的玩家（多人服务端结算时为发包玩家；可能为 null）。</summary>
-            public Player? Player { get; }
+            public Player? Player { get; } = player;
             /// <summary>这次挥动使用的范围挖掘工具（玩家没握着这样的工具时为 null，掉落会散落到世界）。</summary>
-            public IAoeMiningTool? Tool { get; }
-            /// <summary>按玩家手持物品解析责任人。</summary>
-            public AoeSwing(Player? player = null)
-            {
-                Player = player;
-                Tool = GetHeldAoeTool(player);
-            }
+            public IAoeMiningTool? Tool { get; } = GetHeldAoeTool(player);
             /// <summary>本次挥动收集到的全部掉落（结束时交付给 <see cref="Tool"/> 的收纳策略）。</summary>
             public List<Item> Drops { get; } = [];
             /// <summary>已结算过的多格物块左上角：2x2 / 3x2 物块只能结算一次，否则每格掉一份。</summary>
@@ -833,7 +811,7 @@ namespace EternalLib
                 return [];
             }
             List<Item> loot = ExtractChestContents(chest);
-            ClearAndBreakChest(chest, chestIndex, chestX, chestY, dropContents: false, lootSink: loot);
+            chest.ClearAndBreakChest(chestIndex, chestX, chestY, dropContents: false, lootSink: loot);
             return loot;
         }
         /// <summary>
@@ -857,7 +835,7 @@ namespace EternalLib
             int chestX = chest.x;
             int chestY = chest.y;
             List<Item> loot = ExtractChestContents(chest);
-            ClearAndBreakChest(chest, chestIndex, chestX, chestY, dropContents: false, lootSink: loot);
+            chest.ClearAndBreakChest(chestIndex, chestX, chestY, dropContents: false, lootSink: loot);
             Deliver(loot, new Vector2(chestX * 16f + 16f, chestY * 16f + 16f));
         }
         /// <summary>按帧坐标（多格以左上角为准）定位箱子下标；该格不是箱子类方块、或找不到时返回 -1。</summary>
@@ -867,7 +845,7 @@ namespace EternalLib
             {
                 return -1;
             }
-            Point16 origin = GetMultiTileOrigin(tile, x, y);
+            Point16 origin = tile.GetMultiTileOrigin(x, y);
             int chestIndex = Chest.FindChest(origin.X, origin.Y);
             if (chestIndex < 0)
             {
@@ -889,61 +867,7 @@ namespace EternalLib
             {
                 return;
             }
-            ClearAndBreakChest(chest, chestIndex, chest.x, chest.y, dropContents: false);
-        }
-
-        /// <summary>
-        /// 清空箱子物品栏并破坏箱子占用的多格物块。
-        /// </summary>
-        /// <param name="chest">箱子实例</param>
-        /// <param name="chestIndex">箱子在 <see cref="Main.chest"/> 中的下标</param>
-        /// <param name="chestX"></param>
-        /// <param name="chestY"></param>
-        /// <param name="dropContents">是否把内容物直接掉落到世界中（调用方不想自己处理掉落时用）</param>
-        /// <param name="lootSink">
-        /// 非 null 时用原版掉落函数把箱子本体的掉落收进这里（必须在清空数据之前算，函数要读帧坐标判断风格）；
-        /// null 表示不需要这份掉落（例如多人客户端只清理本地副本）。
-        /// </param>
-        public static void ClearAndBreakChest(Chest chest, int chestIndex, int chestX, int chestY, bool dropContents, List<Item>? lootSink = null)
-        {
-            //先清空内容物：DestroyChest 在箱内还有物品时会失败，方块也就破坏不掉
-            Item[] slots = chest.item;
-            for (int i = 0; i < slots.Length; i++)
-            {
-                Item slot = slots[i];
-                if (slot.IsAir || slot.stack <= 0)
-                {
-                    continue;
-                }
-                if (dropContents)
-                {
-                    SpawnDrop(chestX, chestY, slot.Clone());
-                }
-                slots[i] = new Item();
-            }
-            if (!Chest.DestroyChest(chestX, chestY) && chestIndex >= 0 && chestIndex < Main.chest.Length)
-            {
-                //兜底：直接清掉数据槽，避免箱子永远处于“不可破坏”状态
-                Main.chest[chestIndex] = null;
-            }
-            if (lootSink is null)
-            {
-                BreakChestTiles(chestX, chestY);   // 没有 sink 时不需要箱子本体掉落
-                return;
-            }
-            //箱子本体：先问原版掉落函数；拿不到就让引擎自己掉一份并用窗口接住（此时数据已清空，破坏得掉）
-            int before = lootSink.Count;
-            GenerateTileDrops(chestX, chestY, lootSink);
-            if (lootSink.Count == before)
-            {
-                BreakChestTiles(chestX, chestY, lootSink);
-                if (lootSink.Count == before)
-                {
-                    lootSink.AddRange(GetTileItemDrops(chestX, chestY));   // 最后兜底：预测一份
-                }
-                return;
-            }
-            BreakChestTiles(chestX, chestY);
+            chest.ClearAndBreakChest(chestIndex, chest.x, chest.y, dropContents: false);
         }
         /// <summary>
         /// 破坏箱子占用的多格物块（默认屏蔽掉落：本体掉落已由 <see cref="GenerateTileDrops"/> 结算）。
